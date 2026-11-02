@@ -76,10 +76,14 @@ def repair(source, target):
     # Validate existing source headers before trusting the local index.
     inspect(source)
     target.mkdir(parents=True, exist_ok=True)
+    # Only assemble model assets. Download caches/repository metadata are local
+    # state, not shared model components (HF creates target/.cache itself).
+    link_names = {INDEX, 'configuration.json', *shards,
+                  *(Path(name).parts[0] for name in COMPONENTS)}
+    items = [source / name for name in sorted(link_names)
+             if (source / name).exists() and name not in missing]
     # Refuse conflicting entries before starting a large download.
-    for item in source.iterdir():
-        if not item.exists() or item.name in missing:
-            continue
+    for item in items:
         destination = target / item.name
         if destination.exists() or destination.is_symlink():
             if not destination.is_symlink() or destination.resolve() != item.resolve():
@@ -93,6 +97,10 @@ def repair(source, target):
     needed = [name for name in missing if not (target / name).exists()]
     revision = None
     if needed:
+        # A cache linked by an older script could write into shared storage.
+        if (target / '.cache').is_symlink():
+            raise ValueError('local .cache is a symlink; refusing download into shared cache; '
+                             'use a separate target directory or relocate the cache link first')
         from huggingface_hub import HfApi, hf_hub_download
         revision = HfApi().model_info(REPO).sha
         remote_index = hf_hub_download(REPO, INDEX, revision=revision)
@@ -102,9 +110,7 @@ def repair(source, target):
         for name in needed:
             print(f'Downloading only {name}; revision={revision}', flush=True)
             hf_hub_download(REPO, name, revision=revision, local_dir=str(target))
-    for item in source.iterdir():
-        if not item.exists() or item.name in missing:
-            continue
+    for item in items:
         destination = target / item.name
         if not destination.exists() and not destination.is_symlink():
             destination.symlink_to(item, target_is_directory=item.is_dir())

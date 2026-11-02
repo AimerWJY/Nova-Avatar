@@ -61,6 +61,11 @@ class ModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             source, target = Path(folder) / 'shared', Path(folder) / 'local'
             self.setup_source(source)
+            # Both the model mirror and HF downloader have independent caches.
+            (source / '.cache').mkdir()
+            (source / '.cache' / 'shared-marker').write_text('shared cache')
+            (target / '.cache').mkdir(parents=True)
+            (target / '.cache' / 'local-marker').write_text('local cache')
             calls = []
             def download(repo, filename, revision=None, local_dir=None):
                 calls.append(filename)
@@ -78,6 +83,33 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(calls, [model.INDEX, 'one.safetensors'])
             self.assertFalse((source / 'one.safetensors').exists())
             self.assertFalse((target / 'one.safetensors').is_symlink())
+            self.assertEqual((target / '.cache' / 'local-marker').read_text(), 'local cache')
+            self.assertEqual((source / '.cache' / 'shared-marker').read_text(), 'shared cache')
+            self.assertFalse((target / '.cache' / 'shared-marker').exists())
+
+    def test_shared_cache_and_repository_metadata_are_not_linked(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, target = Path(folder) / 'shared', Path(folder) / 'local'
+            self.setup_source(source)
+            tensor_file(source / 'one.safetensors')
+            for name in ('.cache', '.git', 'assets'):
+                (source / name).mkdir()
+            with patch.dict('sys.modules', {'huggingface_hub': None}):
+                model.repair(source, target)
+            for name in ('.cache', '.git', 'assets'):
+                self.assertFalse((target / name).exists())
+
+    def test_symlinked_local_cache_blocks_network_download(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, target = Path(folder) / 'shared', Path(folder) / 'local'
+            self.setup_source(source)
+            (source / '.cache').mkdir()
+            target.mkdir()
+            (target / '.cache').symlink_to(source / '.cache', target_is_directory=True)
+            with patch.dict('sys.modules', {'huggingface_hub': None}):
+                with self.assertRaisesRegex(ValueError, '.cache is a symlink'):
+                    model.repair(source, target)
+            self.assertTrue((target / '.cache').is_symlink())
 
     def test_conflict_is_preserved(self):
         with tempfile.TemporaryDirectory() as folder:
