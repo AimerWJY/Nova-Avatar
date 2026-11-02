@@ -55,7 +55,7 @@ if not any(line.startswith('torch==') for line in lines):
 Path(sys.argv[1]).write_text('\n'.join(lines) + '\n')
 PY
     python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/cloud.txt"
-    python -m pip check
+    python "$REPO_DIR/scripts/cloud_dependencies.py"
     python -m pip freeze > "$NOVA_ROOT/reports/environment-$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
     ;;
   model-check|model-repair)

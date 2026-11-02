@@ -3,11 +3,12 @@ import argparse
 import importlib
 import json
 import shutil
-import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+from cloud_dependencies import check_dependencies
 
 
 def main():
@@ -16,7 +17,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     report = {'python': sys.version, 'executable': sys.executable,
-              'packages': {}, 'tools': {}, 'errors': []}
+              'packages': {}, 'tools': {}, 'errors': [], 'warnings': []}
     for name in ('torch', 'torchvision', 'transformers', 'diffusers', 'accelerate',
                  'safetensors', 'numpy', 'cv2', 'librosa', 'soundfile', 'decord',
                  'einops', 'easydict', 'ftfy', 'imageio', 'sentencepiece'):
@@ -41,10 +42,11 @@ def main():
             report['errors'].append(f'{tool} missing')
     usage = shutil.disk_usage(args.root)
     report['disk'] = {'root': str(args.root), 'total_bytes': usage.total, 'free_bytes': usage.free}
-    result = subprocess.run([sys.executable, '-m', 'pip', 'check'], capture_output=True, text=True)
-    report['pip_check'] = result.stdout + result.stderr
-    if result.returncode:
-        report['errors'].append('pip check failed')
+    dependencies = check_dependencies()
+    report['pip_check'] = dependencies['raw_output']
+    report['dependency_check'] = dependencies
+    report['errors'].extend(dependencies['errors'])
+    report['warnings'].extend(dependencies['warnings'])
     args.output.mkdir(parents=True, exist_ok=True)
     token = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '_' + uuid.uuid4().hex[:8]
     destination = args.output / f'environment_{token}.json'

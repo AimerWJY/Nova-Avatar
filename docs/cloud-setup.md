@@ -63,6 +63,14 @@ bash scripts/cloud.sh check
 
 requirements 更新后再运行 install-deps；不必每次运行 model-repair。命令失败时将终端输出和 reports 中的环境报告带回分析。不要在报告中添加登录凭证。
 
+## decord 0.6.0 平台标签告警
+
+上游 Linux wheel 的文件名为 py3-none-manylinux2010_x86_64，但内部 WHEEL 标签误写为 cp36-cp36m-manylinux2010_x86_64，参见 https://github.com/dmlc/decord/issues/356 。在 Python 3.12 中，可能出现能导入、但 pip check 报 `decord 0.6.0 is not supported on this platform` 的情况。重复安装同一个包不能修复上游标签。
+
+check/install-deps 使用 scripts/cloud_dependencies.py 保留原始 pip check 输出和返回码。仅当报错恰好只有这一条、版本为0.6.0、内部标签完全匹配、系统为Linux x86_64时，额外用FFmpeg生成5帧小视频，在限时子进程中验证decord的CPU解码、首中尾帧形状和像素内容。测试通过将已知元数据问题记为warning，不修改WHEEL或关闭检查；测试失败或出现其他依赖问题仍返回失败。
+
+这项小视频测试不保证所有编码格式和长视频都兼容，后续还需要使用真实输入测试。直接执行 `python -m pip check` 仍会报告原始标签错误，这是预期行为；以项目check报告中的errors、warnings及decord_decode_test共同判断。服务器拉取更新后运行check即可，无需因本次更新重装整套环境。
+
 ## 命令及配置
 
 | 命令 | 行为 |

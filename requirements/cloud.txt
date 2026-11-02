@@ -7,7 +7,7 @@ numpy>=1.26,<2
 opencv-python<4.12
 librosa>=0.10.2,<0.12
 soundfile
-decord
+decord==0.6.0
 einops
 easydict
 ftfy
