@@ -1,0 +1,17 @@
+# Core versions already verified on the target server. PyTorch is platform-provided.
+transformers==4.51.3
+diffusers==0.39.0
+accelerate==1.15.0
+safetensors==0.8.0
+numpy>=1.26,<2
+opencv-python<4.12
+librosa>=0.10.2,<0.12
+soundfile
+decord
+einops
+easydict
+ftfy
+imageio
+imageio-ffmpeg
+sentencepiece
+protobuf
