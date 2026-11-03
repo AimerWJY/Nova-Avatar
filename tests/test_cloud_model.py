@@ -52,10 +52,35 @@ class ModelTests(unittest.TestCase):
             self.setup_source(source)
             tensor_file(source / 'one.safetensors')
             with patch.dict('sys.modules', {'huggingface_hub': None}):
-                model.repair(source, target)
-                model.repair(source, target)
-            self.assertTrue((target / 'one.safetensors').is_symlink())
-            self.assertEqual(model.inspect(target), [])
+                self.assertEqual(model.repair(source, target), source.resolve())
+                self.assertEqual(model.repair(source, target), source.resolve())
+            self.assertFalse(target.exists())
+
+    def test_complete_shared_model_ignores_old_truncated_local_shard(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, target = Path(folder) / 'shared', Path(folder) / 'local'
+            self.setup_source(source)
+            tensor_file(source / 'one.safetensors')
+            target.mkdir()
+            broken = target / 'one.safetensors'
+            broken.write_bytes(b'old partial download')
+            (target / model.INDEX).write_text((source / model.INDEX).read_text())
+            with patch.dict('sys.modules', {'huggingface_hub': None}):
+                self.assertEqual(model.repair(source, target), source.resolve())
+            self.assertEqual(broken.read_bytes(), b'old partial download')
+            with patch('sys.argv', ['cloud_model.py', 'check', '--source', str(source),
+                                    '--target', str(target)]):
+                self.assertEqual(model.main(), 0)
+
+    def test_explicit_model_dir_is_checked_without_fallback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source, target = Path(folder) / 'shared', Path(folder) / 'local'
+            self.setup_source(source)
+            self.setup_source(target)
+            tensor_file(source / 'one.safetensors')
+            with patch('sys.argv', ['cloud_model.py', 'check', '--source', str(source),
+                                    '--model-dir', str(target)]):
+                self.assertEqual(model.main(), 1)
 
     def test_missing_shard_downloads_only_once(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -91,7 +116,8 @@ class ModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             source, target = Path(folder) / 'shared', Path(folder) / 'local'
             self.setup_source(source)
-            tensor_file(source / 'one.safetensors')
+            target.mkdir()
+            tensor_file(target / 'one.safetensors')
             for name in ('.cache', '.git', 'assets'):
                 (source / name).mkdir()
             with patch.dict('sys.modules', {'huggingface_hub': None}):
@@ -115,7 +141,6 @@ class ModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             source, target = Path(folder) / 'shared', Path(folder) / 'local'
             self.setup_source(source)
-            tensor_file(source / 'one.safetensors')
             target.mkdir()
             conflict = target / 'config.json'
             conflict.write_text('keep me')

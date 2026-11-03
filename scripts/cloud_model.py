@@ -7,6 +7,7 @@ from pathlib import Path
 
 INDEX = 'diffusion_pytorch_model.safetensors.index.json'
 REPO = 'Wan-AI/Wan2.2-S2V-14B'
+DEFAULT_SOURCE = Path('/model/HuggingFace/Wan-AI/Wan2.2-S2V-14B')
 COMPONENTS = ('config.json', 'Wan2.1_VAE.pth', 'models_t5_umt5-xxl-enc-bf16.pth',
               'google/umt5-xxl', 'wav2vec2-large-xlsr-53-english')
 
@@ -62,6 +63,11 @@ def inspect(root):
 
 def repair(source, target):
     source = source.resolve(strict=True)
+    if not inspect(source):
+        print(f'Shared model ready; using directly: {source}')
+        return source
+    if target is None:
+        raise ValueError('shared model incomplete; --target is required for local repair')
     if target.is_symlink():
         raise ValueError('target must not be a symlink')
     target = target.resolve()
@@ -73,8 +79,6 @@ def repair(source, target):
             raise ValueError(f'non-shard component missing: {name}; repair only downloads shards')
     shards = set(mapping.values())
     missing = sorted(name for name in shards if not (source / name).is_file())
-    # Validate existing source headers before trusting the local index.
-    inspect(source)
     target.mkdir(parents=True, exist_ok=True)
     # Only assemble model assets. Download caches/repository metadata are local
     # state, not shared model components (HF creates target/.cache itself).
@@ -122,19 +126,24 @@ def repair(source, target):
             'shared_source': str(source), 'validation': 'index, header keys and payload bounds; not full checksum'
         }, indent=2) + '\n')
     print(f'Model view ready: {target}')
+    return target
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['check', 'repair'])
-    parser.add_argument('--source', type=Path, required=True)
-    parser.add_argument('--target', type=Path, required=True)
+    parser.add_argument('--source', type=Path, default=DEFAULT_SOURCE,
+                        help='shared source for repair; default location for check')
+    parser.add_argument('--target', type=Path,
+                        help='local repair directory; never auto-selected by check')
+    parser.add_argument('--model-dir', type=Path,
+                        help='explicit directory for check (default: --source)')
     args = parser.parse_args()
     try:
         if args.action == 'repair':
             repair(args.source, args.target)
             return 0
-        root = args.target if (args.target / INDEX).is_file() else args.source
+        root = args.model_dir if args.model_dir is not None else args.source
         print(f'Checking: {root}')
         return 1 if inspect(root) else 0
     except (OSError, ValueError, KeyError, ImportError, struct.error) as exc:

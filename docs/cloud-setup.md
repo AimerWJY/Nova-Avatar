@@ -8,12 +8,12 @@
 | --- | --- |
 | /cloud/nova-avatar/repo | 建议的本仓库克隆位置 |
 | /cloud/nova-avatar/.venv | Python 环境；复用云平台 PyTorch |
-| /cloud/nova-avatar/models | 完整模型视图及补下载的权重 |
+| /cloud/nova-avatar/models | 仅共享权重缺失时可选的修复目录，非默认模型路径 |
 | /cloud/nova-avatar/inputs | person.png、speech.wav 等测试输入 |
 | /cloud/nova-avatar/outputs | 后续推理结果 |
 | /cloud/nova-avatar/reports | 环境检查、依赖快照 |
 | /cloud/nova-avatar/cache | Hugging Face、pip 缓存 |
-| /model/HuggingFace/Wan-AI/Wan2.2-S2V-14B | 平台共享模型，只读使用 |
+| /model/HuggingFace/Wan-AI/Wan2.2-S2V-14B | 默认模型路径，直接只读使用 |
 | /cloud/nova-avatar/Wan2.2 | 此前下载的官方代码，与本仓库分开 |
 
 若本仓库已经克隆到别处，直接在那个目录运行即可，不必重新克隆。Git 中仅需提交源码、requirements、测试和文档。首次克隆请使用你自己的仓库地址：
@@ -36,14 +36,16 @@ bash scripts/cloud.sh check
 bash scripts/cloud.sh model-check
 ```
 
-当前已知共享模型缺少第一个 DiT 分片，`model-check` 此时以状态码 1 退出是预期结果。确认报告是缺分片后再执行：
+目前默认直接使用共享模型目录，model-check不会自动选择/cloud中的旧副本。四个分片都通过即可继续，无需重新下载、复制或建立链接。已有/cloud目录仍用于环境、缓存、素材和输出，脚本不会删除以前上传的不完整文件。
+
+只有共享模型确实缺分片、需要本地修复时再执行：
 
 ```bash
 bash scripts/cloud.sh model-repair
-bash scripts/cloud.sh model-check
+NOVA_MODEL_DIR=/cloud/nova-avatar/models/Wan2.2-S2V-14B bash scripts/cloud.sh model-check
 ```
 
-`model-repair` 需要访问 Hugging Face。已知缺失文件约 9.97GB，下载消耗数据盘空间及流量。中断后可以重跑，下载恢复行为由 huggingface_hub 管理。它将：
+`model-repair` 首先验证共享模型。共享模型完整时直接返回共享路径，不访问网络、不创建本地模型目录，也不检查或修改旧的本地副本。共享权重缺失时才执行以下修复；下载缺失分片需要访问Hugging Face，消耗数据盘空间及流量。中断后可以重跑，下载恢复行为由huggingface_hub管理：
 
 1. 检查共享索引、现有分片张量头及必需组件。
 2. 固定本次远端 revision，比较远端与本地索引；不同则停止。
@@ -80,8 +82,8 @@ check/install-deps 使用 scripts/cloud_dependencies.py 保留原始 pip check �
 | init | 创建数据目录；已有环境复用，不重新创建；新环境使用 --system-site-packages |
 | install-deps | 安装项目基础依赖，生成GPU包约束和pip freeze快照 |
 | check | 导入基础依赖、查询CUDA/工具/剩余磁盘、运行pip check，写JSON报告 |
-| model-check | 优先检查本地模型视图，否则检查共享目录；不下载模型 |
-| model-repair | 下载缺分片并建立本地链接视图 |
+| model-check | 检查NOVA_MODEL_DIR，默认直接检查共享目录；不回退到本地、不下载模型 |
+| model-repair | 共享模型完整时直接使用；不完整时才补下载并建立本地链接视图 |
 
 install-deps 将现有 torch、torchvision、torchaudio（若存在）版本写入 pip constraints，依赖冲突时报错而不主动替换GPU包。venv隔离新增包，但可读取平台包；不会安装 torchaudio、FlashAttention、ComfyUI 或低显存推理框架。这只是基础环境，不是可直接运行S2V的完整依赖锁文件。非核心依赖为版本范围，成功安装的准确版本以服务器生成的 freeze 文件为准。
 
@@ -92,7 +94,7 @@ NOVA_ROOT=/another/data/nova-avatar bash scripts/cloud.sh init
 NOVA_ROOT=/another/data/nova-avatar bash scripts/cloud.sh check
 ```
 
-所有命令应使用相同 NOVA_ROOT。可选 NOVA_VENV、NOVA_SHARED_MODEL、HF_HOME、PIP_CACHE_DIR。已有HF_HOME/PIP_CACHE_DIR会被尊重；否则缓存默认位于数据盘。
+所有命令应使用相同 NOVA_ROOT。可选 NOVA_VENV、NOVA_SHARED_MODEL、NOVA_MODEL_DIR、HF_HOME、PIP_CACHE_DIR。NOVA_MODEL_DIR默认等于NOVA_SHARED_MODEL；修改NOVA_ROOT不会改变默认共享模型路径。NOVA_SHARED_MODEL指定修复来源，NOVA_MODEL_DIR指定检查路径；修复结果不自动改变后续命令的路径。已有HF_HOME/PIP_CACHE_DIR会被尊重；否则缓存默认位于数据盘。
 
 ## 当前限制
 

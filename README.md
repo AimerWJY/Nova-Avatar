@@ -11,8 +11,9 @@ bash scripts/cloud.sh init
 bash scripts/cloud.sh install-deps
 bash scripts/cloud.sh check
 bash scripts/cloud.sh model-check
-bash scripts/cloud.sh model-repair
 ```
+
+模型默认直接使用 `/model/HuggingFace/Wan-AI/Wan2.2-S2V-14B`。共享权重完整时无需model-repair；旧的/cloud模型副本不会被自动选中。/cloud仍保留环境、缓存和输入输出。
 
 首次及更新执行顺序、各命令副作用见 [docs/cloud-setup.md](docs/cloud-setup.md)。目前入口不启动推理或训练。
 

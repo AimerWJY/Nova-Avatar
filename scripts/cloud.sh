@@ -4,13 +4,14 @@ set -euo pipefail
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 NOVA_ROOT="${NOVA_ROOT:-/cloud/nova-avatar}"
 NOVA_SHARED_MODEL="${NOVA_SHARED_MODEL:-/model/HuggingFace/Wan-AI/Wan2.2-S2V-14B}"
+NOVA_MODEL_DIR="${NOVA_MODEL_DIR:-$NOVA_SHARED_MODEL}"
 NOVA_VENV="${NOVA_VENV:-$NOVA_ROOT/.venv}"
 export HF_HOME="${HF_HOME:-$NOVA_ROOT/cache/huggingface}"
 export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$NOVA_ROOT/cache/pip}"
 
 usage() {
   echo 'Usage: bash scripts/cloud.sh {init|check|install-deps|model-check|model-repair}'
-  echo 'Overrides: NOVA_ROOT, NOVA_VENV, NOVA_SHARED_MODEL, HF_HOME, PIP_CACHE_DIR'
+  echo 'Overrides: NOVA_ROOT, NOVA_VENV, NOVA_SHARED_MODEL, NOVA_MODEL_DIR, HF_HOME, PIP_CACHE_DIR'
 }
 
 activate_environment() {
@@ -23,7 +24,7 @@ activate_environment() {
 
 case "${1:-help}" in
   init)
-    mkdir -p "$NOVA_ROOT"/{models,inputs,outputs,reports,cache/pip,cache/huggingface}
+    mkdir -p "$NOVA_ROOT"/{inputs,outputs,reports,cache/pip,cache/huggingface}
     if [[ ! -f "$NOVA_VENV/bin/activate" ]]; then
       python3 -m venv --system-site-packages "$NOVA_VENV"
     fi
@@ -58,9 +59,13 @@ PY
     python "$REPO_DIR/scripts/cloud_dependencies.py"
     python -m pip freeze > "$NOVA_ROOT/reports/environment-$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
     ;;
-  model-check|model-repair)
+  model-check)
     activate_environment
-    python "$REPO_DIR/scripts/cloud_model.py" "${1#model-}" \
+    python "$REPO_DIR/scripts/cloud_model.py" check --model-dir "$NOVA_MODEL_DIR"
+    ;;
+  model-repair)
+    activate_environment
+    python "$REPO_DIR/scripts/cloud_model.py" repair \
       --source "$NOVA_SHARED_MODEL" --target "$NOVA_ROOT/models/Wan2.2-S2V-14B"
     ;;
   help|-h|--help) usage ;;
