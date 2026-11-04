@@ -65,6 +65,34 @@ class InferenceTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'revision'):
                 inference.backend_provenance()
 
+    def test_pinned_git_and_archive_installations_accepted(self):
+        revision = inference.PIN_FILE.read_text().strip()
+        for direct_url, installation in (
+            ({'vcs_info': {'commit_id': revision}}, 'git'),
+            ({'url': f'https://codeload.github.com/modelscope/DiffSynth-Studio/zip/{revision}',
+              'archive_info': {'hashes': {'sha256': 'recorded_hash'}}}, 'commit_archive'),
+        ):
+            distribution = SimpleNamespace(version='x', read_text=lambda name: json.dumps(direct_url))
+            with self.subTest(installation=installation), patch.object(
+                    inference.importlib.metadata, 'distribution', return_value=distribution):
+                report = inference.backend_provenance()
+                self.assertEqual(report['revision'], revision)
+                self.assertEqual(report['installation'], installation)
+
+    def test_other_archive_urls_or_missing_metadata_rejected(self):
+        revision = inference.PIN_FILE.read_text().strip()
+        urls = [
+            {'url': 'https://codeload.github.com/modelscope/DiffSynth-Studio/zip/main', 'archive_info': {}},
+            {'url': f'https://example.com/zip/{revision}', 'archive_info': {}},
+            {'url': f'https://codeload.github.com/modelscope/DiffSynth-Studio/zip/{revision}'},
+        ]
+        for direct_url in urls:
+            distribution = SimpleNamespace(version='x', read_text=lambda name: json.dumps(direct_url))
+            with self.subTest(url=direct_url), patch.object(
+                    inference.importlib.metadata, 'distribution', return_value=distribution):
+                with self.assertRaisesRegex(ValueError, 'revision'):
+                    inference.backend_provenance()
+
     def test_failed_inference_preserves_report(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

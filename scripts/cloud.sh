@@ -63,7 +63,9 @@ PY
         exit 1
       fi
       python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/diffsynth.txt"
-      python -m pip install --no-deps "git+https://github.com/modelscope/DiffSynth-Studio.git@$revision"
+      # A commit-pinned HTTPS archive avoids Git clone/fetch TLS failures.
+      python -m pip install --no-deps --retries 5 --timeout 120 \
+        "diffsynth @ https://codeload.github.com/modelscope/DiffSynth-Studio/zip/$revision"
       python -c 'from diffsynth.pipelines.wan_video import WanVideoPipeline, ModelConfig; print("DiffSynth S2V import OK")'
     else
       python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/cloud.txt"

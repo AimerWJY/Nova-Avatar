@@ -132,9 +132,15 @@ def backend_provenance():
     direct_url = json.loads(distribution.read_text('direct_url.json') or '{}')
     commit = direct_url.get('vcs_info', {}).get('commit_id')
     expected = PIN_FILE.read_text().strip()
-    if commit != expected:
+    expected_archive = f'https://codeload.github.com/modelscope/DiffSynth-Studio/zip/{expected}'
+    archive_matches = (direct_url.get('url') == expected_archive and
+                       isinstance(direct_url.get('archive_info'), dict))
+    if commit != expected and not archive_matches:
         raise ValueError('DiffSynth revision differs from the project pin; run install-diffsynth')
-    return {'version': distribution.version, 'revision': commit}
+    return {'version': distribution.version, 'revision': expected,
+            'installation': 'commit_archive' if archive_matches else 'git',
+            'source_url': direct_url.get('url'),
+            'archive_hashes': direct_url.get('archive_info', {}).get('hashes', {})}
 
 
 def execute(plan, directory, report):

@@ -10,7 +10,9 @@
 bash scripts/cloud.sh install-diffsynth
 ```
 
-从官方Git仓库安装configs/diffsynth-revision.txt固定的提交。先安装requirements/diffsynth.txt，复用并约束现有PyTorch及核心包，再用--no-deps安装该提交，防止上游依赖解析替换平台GPU包。新增ModelScope、pandas、PEFT等依赖；不安装量化、训练、audio/all extras，也不要求额外FlashAttention。PEFT为兼容当前transformers固定为0.15.2。安装结束检查S2V接口能否导入和依赖状态，依赖冲突会报错。
+从GitHub官方codeload端点安装configs/diffsynth-revision.txt固定提交的ZIP源码包，不经过git clone/fetch，避免Git的GnuTLS握手中断。先安装requirements/diffsynth.txt，复用并约束现有PyTorch及核心包，再用--no-deps安装该提交，防止上游依赖解析替换平台GPU包。新增ModelScope、pandas、PEFT等依赖；不安装量化、训练、audio/all extras，也不要求额外FlashAttention。PEFT为兼容当前transformers固定为0.15.2。安装结束检查S2V接口能否导入和依赖状态，依赖冲突会报错。
+
+源码下载设置重试5次和连接读取超时120秒；仍需要能访问codeload.github.com，不保证能绕过网络故障。无需关闭TLS证书校验或升级pip。若旧安装命令在git fetch阶段失败，拉取更新后重新运行install-diffsynth即可，已满足的依赖会复用。推理接受原有固定提交的Git安装和新的固定提交官方ZIP安装；报告记录来源及pip保存的archive哈希，不接受main分支ZIP或未知来源。
 
 此命令需要网络来下载代码和Python包；推理只读本地模型，不下载任何示例、模型或数据集。首次安装后保留reports里的环境快照。若实际环境有额外不兼容，保存错误后针对性处理，不随意升级PyTorch。
 
