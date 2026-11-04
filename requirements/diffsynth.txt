@@ -1,0 +1,5 @@
+-r cloud.txt
+peft==0.15.2
+pandas>=2,<3
+modelscope>=1.18
+Pillow>=10

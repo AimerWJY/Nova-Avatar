@@ -10,7 +10,8 @@ export HF_HOME="${HF_HOME:-$NOVA_ROOT/cache/huggingface}"
 export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$NOVA_ROOT/cache/pip}"
 
 usage() {
-  echo 'Usage: bash scripts/cloud.sh {init|check|install-deps|model-check|model-repair}'
+  echo 'Usage: bash scripts/cloud.sh {init|check|install-deps|install-diffsynth|infer|model-check|model-repair}'
+  echo 'Inference options: bash scripts/cloud.sh infer --help'
   echo 'Overrides: NOVA_ROOT, NOVA_VENV, NOVA_SHARED_MODEL, NOVA_MODEL_DIR, HF_HOME, PIP_CACHE_DIR'
 }
 
@@ -36,7 +37,7 @@ case "${1:-help}" in
     activate_environment
     python "$REPO_DIR/scripts/cloud_environment.py" --output "$NOVA_ROOT/reports" --root "$NOVA_ROOT"
     ;;
-  install-deps)
+  install-deps|install-diffsynth)
     activate_environment
     mkdir -p "$NOVA_ROOT/reports"
     constraints="$(mktemp "$NOVA_ROOT/reports/torch-constraints.XXXXXX")"
@@ -55,9 +56,31 @@ if not any(line.startswith('torch==') for line in lines):
     raise SystemExit('Platform PyTorch missing; stop before dependency installation.')
 Path(sys.argv[1]).write_text('\n'.join(lines) + '\n')
 PY
-    python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/cloud.txt"
+    if [[ "$1" == install-diffsynth ]]; then
+      revision="$(tr -d '\n\r' < "$REPO_DIR/configs/diffsynth-revision.txt")"
+      if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+        echo 'Invalid pinned DiffSynth revision' >&2
+        exit 1
+      fi
+      python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/diffsynth.txt"
+      python -m pip install --no-deps "git+https://github.com/modelscope/DiffSynth-Studio.git@$revision"
+      python -c 'from diffsynth.pipelines.wan_video import WanVideoPipeline, ModelConfig; print("DiffSynth S2V import OK")'
+    else
+      python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/cloud.txt"
+    fi
     python "$REPO_DIR/scripts/cloud_dependencies.py"
     python -m pip freeze > "$NOVA_ROOT/reports/environment-$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
+    ;;
+  infer)
+    activate_environment
+    export DIFFSYNTH_SKIP_DOWNLOAD=True
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+    export PYTHONUNBUFFERED=1
+    mkdir -p "$NOVA_ROOT/reports"
+    log="$NOVA_ROOT/reports/infer-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
+    python "$REPO_DIR/scripts/infer_s2v.py" --root "$NOVA_ROOT" \
+      --model-dir "$NOVA_MODEL_DIR" "${@:2}" 2>&1 | tee "$log"
     ;;
   model-check)
     activate_environment

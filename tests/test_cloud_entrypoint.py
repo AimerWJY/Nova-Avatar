@@ -34,6 +34,21 @@ class EntrypointTests(unittest.TestCase):
     def test_explicit_override(self):
         self.check_arguments('/custom/model')
 
+    def test_infer_forwards_arguments_and_offline_environment(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            activate = root / '.venv/bin/activate'
+            activate.parent.mkdir(parents=True)
+            activate.write_text('python() { printf "%s\\n" "$@"; '
+                                'printf "offline=%s\\n" "$HF_HUB_OFFLINE"; }\n')
+            env = dict(os.environ, NOVA_ROOT=str(root), NOVA_VENV=str(root / '.venv'),
+                       NOVA_MODEL_DIR='/shared/model')
+            result = subprocess.run(['bash', str(SCRIPT), 'infer', '--dry-run', '--seconds', '2'],
+                                    env=env, capture_output=True, text=True, check=True)
+            self.assertIn('--model-dir\n/shared/model\n--dry-run\n--seconds\n2', result.stdout)
+            self.assertIn('offline=1', result.stdout)
+            self.assertEqual(len(list((root / 'reports').glob('infer-*.log'))), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

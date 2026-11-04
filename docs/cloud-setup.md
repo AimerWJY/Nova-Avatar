@@ -81,6 +81,8 @@ check/install-deps 使用 scripts/cloud_dependencies.py 保留原始 pip check �
 | --- | --- |
 | init | 创建数据目录；已有环境复用，不重新创建；新环境使用 --system-site-packages |
 | install-deps | 安装项目基础依赖，生成GPU包约束和pip freeze快照 |
+| install-diffsynth | 安装固定提交的DiffSynth及推理补充依赖 |
+| infer | 使用本地权重执行单片离线教师推理；--dry-run仅检查输入 |
 | check | 导入基础依赖、查询CUDA/工具/剩余磁盘、运行pip check，写JSON报告 |
 | model-check | 检查NOVA_MODEL_DIR，默认直接检查共享目录；不回退到本地、不下载模型 |
 | model-repair | 共享模型完整时直接使用；不完整时才补下载并建立本地链接视图 |
@@ -98,7 +100,7 @@ NOVA_ROOT=/another/data/nova-avatar bash scripts/cloud.sh check
 
 ## 当前限制
 
-此入口只完成准备阶段，不启动官方BF16推理，不转换Kijai FP8格式，也不启动蒸馏。FP8权重必须匹配加载器；24GB显存和首播2秒指标仍需实测。不要直接将官方14B模型整体移到4090上。
+准备命令不启动推理。infer通过DiffSynth低显存管理运行官方BF16权重，见[推理说明](inference.md)。不转换Kijai FP8格式，也不启动蒸馏。24GB显存和首播2秒指标仍需实测，不要将官方14B模型整体移到4090上。
 
 本地逻辑测试：
 
