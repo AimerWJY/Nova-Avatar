@@ -1,0 +1,7 @@
+{
+  "version": "20261020",
+  "url": "https://github.com/Tencent/ncnn/releases/download/20261020/ncnn-20261020-android-vulkan-shared.zip",
+  "filename": "ncnn-20261020-android-vulkan-shared.zip",
+  "sha256": "1b01048590564bae1c3d2d2a2b37ff101d50ad86c2cd2dc862bce7087905444d",
+  "abi": "arm64-v8a"
+}

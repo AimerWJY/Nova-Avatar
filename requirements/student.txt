@@ -1,0 +1,4 @@
+# Keep the platform torch/torchvision installation; cloud.sh constrains those packages.
+av==16.0.1
+numpy>=1.26,<3
+Pillow>=10,<13

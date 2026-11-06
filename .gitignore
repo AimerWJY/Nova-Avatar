@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+build/
 data/
 checkpoints/
 outputs/

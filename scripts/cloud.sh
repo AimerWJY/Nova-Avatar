@@ -10,7 +10,7 @@ export HF_HOME="${HF_HOME:-$NOVA_ROOT/cache/huggingface}"
 export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$NOVA_ROOT/cache/pip}"
 
 usage() {
-  echo 'Usage: bash scripts/cloud.sh {init|check|install-deps|install-diffsynth|infer|model-check|model-repair}'
+  echo 'Usage: bash scripts/cloud.sh {init|check|install-deps|install-diffsynth|install-student-deps|infer|model-check|model-repair|student-prepare|student-train|student-mouth-train|student-compare|student-export|student-infer|student-mobile-export|student-mobile-fixture|student-mobile-diagnose}'
   echo 'Inference options: bash scripts/cloud.sh infer --help'
   echo 'Overrides: NOVA_ROOT, NOVA_VENV, NOVA_SHARED_MODEL, NOVA_MODEL_DIR, HF_HOME, PIP_CACHE_DIR'
 }
@@ -37,7 +37,7 @@ case "${1:-help}" in
     activate_environment
     python "$REPO_DIR/scripts/cloud_environment.py" --output "$NOVA_ROOT/reports" --root "$NOVA_ROOT"
     ;;
-  install-deps|install-diffsynth)
+  install-deps|install-diffsynth|install-student-deps)
     activate_environment
     mkdir -p "$NOVA_ROOT/reports"
     constraints="$(mktemp "$NOVA_ROOT/reports/torch-constraints.XXXXXX")"
@@ -67,6 +67,8 @@ PY
       python -m pip install --no-deps --retries 5 --timeout 120 \
         "diffsynth @ https://codeload.github.com/modelscope/DiffSynth-Studio/zip/$revision"
       python -c 'from diffsynth.pipelines.wan_video import WanVideoPipeline, ModelConfig; print("DiffSynth S2V import OK")'
+    elif [[ "$1" == install-student-deps ]]; then
+      python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/student.txt"
     else
       python -m pip install -c "$constraints" -r "$REPO_DIR/requirements/cloud.txt"
     fi
@@ -83,6 +85,11 @@ PY
     log="$NOVA_ROOT/reports/infer-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
     python "$REPO_DIR/scripts/infer_s2v.py" --root "$NOVA_ROOT" \
       --model-dir "$NOVA_MODEL_DIR" "${@:2}" 2>&1 | tee "$log"
+    ;;
+  student-prepare|student-train|student-mouth-train|student-compare|student-export|student-infer|student-mobile-export|student-mobile-fixture|student-mobile-diagnose)
+    activate_environment
+    script="${1//-/_}.py"
+    python "$REPO_DIR/scripts/$script" "${@:2}"
     ;;
   model-check)
     activate_environment
