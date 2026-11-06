@@ -71,3 +71,29 @@ generation_fps包括本次条件编码、去噪和VAE解码，不包含模型加
 
 - https://github.com/modelscope/DiffSynth-Studio/blob/1e8ae1d59c1baaae6c4c85fef717a44682b0fbd5/examples/wanvideo/model_inference_low_vram/Wan2.2-S2V-14B.py
 - https://github.com/modelscope/DiffSynth-Studio/blob/1e8ae1d59c1baaae6c4c85fef717a44682b0fbd5/diffsynth/core/loader/config.py
+
+## Q2_K 短片测试
+
+同一 Wan2.2-S2V-14B 的公开 GGUF 量化权重，使用固定版本的
+[stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp/releases/tag/master-1052-f5df5f8)。
+这项测试不需要 Python 虚拟环境。CUDA 编译需要 `git`、`cmake`、C++ 编译器及 CUDA Toolkit 的 `nvcc`。
+只有 CUDA 版 PyTorch 不代表镜像包含 `nvcc`。推理需要 `ffmpeg`、`ffprobe` 和 `nvidia-smi`。
+
+```bash
+bash scripts/cloud.sh quant-s2v plan
+bash scripts/cloud.sh quant-s2v build
+bash scripts/cloud.sh quant-s2v assets
+bash scripts/cloud.sh quant-s2v run
+```
+
+先确认能构建运行器，再下载约 16.4 GB 权重。默认放在
+`/cloud/nova-avatar/models/wan-s2v-q2`。下载中断可重新执行 `assets`，
+已有或手工上传的同名文件会按大小和 SHA256 校验。可用 `--assets-dir` 指向已下载目录。
+如果已有兼容的 CUDA 版 `sd-cli`，可用 `run --binary /path/to/sd-cli`。
+
+默认以 `person_01.png` 和 `emotion.wav` 生成 480×640、约 2 秒的短片。
+按上游 S2V 示例用 Euler、20 步、CFG 6、16 FPS，不叠加少步 LoRA。
+`outputs/s2v_q2_*/` 包含 `video.mp4`、`report.json`、`sd-cli.log` 及显存采样。
+显存为设备级采样，包含同一 GPU 上其他进程的占用。
+这轮用于判断短片画质和运行可行性。与 DiffSynth 的原始教师视频对照时，
+需考虑后端、采样器和参数差异。手机装载和 10 秒跨段生成另行验证。

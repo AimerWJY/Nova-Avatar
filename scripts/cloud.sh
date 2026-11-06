@@ -10,7 +10,7 @@ export HF_HOME="${HF_HOME:-$NOVA_ROOT/cache/huggingface}"
 export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$NOVA_ROOT/cache/pip}"
 
 usage() {
-  echo 'Usage: bash scripts/cloud.sh {init|check|install-deps|install-diffsynth|install-student-deps|infer|model-check|model-repair|student-prepare|student-train|student-mouth-train|student-compare|student-export|student-infer|student-mobile-export|student-mobile-fixture|student-mobile-diagnose}'
+  echo 'Usage: bash scripts/cloud.sh {init|check|install-deps|install-diffsynth|install-student-deps|infer|quant-s2v|model-check|model-repair|student-prepare|student-train|student-mouth-train|student-compare|student-export|student-infer|student-mobile-export|student-mobile-fixture|student-mobile-diagnose}'
   echo 'Inference options: bash scripts/cloud.sh infer --help'
   echo 'Overrides: NOVA_ROOT, NOVA_VENV, NOVA_SHARED_MODEL, NOVA_MODEL_DIR, HF_HOME, PIP_CACHE_DIR'
 }
@@ -85,6 +85,9 @@ PY
     log="$NOVA_ROOT/reports/infer-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
     python "$REPO_DIR/scripts/infer_s2v.py" --root "$NOVA_ROOT" \
       --model-dir "$NOVA_MODEL_DIR" "${@:2}" 2>&1 | tee "$log"
+    ;;
+  quant-s2v)
+    python3 "$REPO_DIR/scripts/quant_s2v.py" --root "$NOVA_ROOT" "${@:2}"
     ;;
   student-prepare|student-train|student-mouth-train|student-compare|student-export|student-infer|student-mobile-export|student-mobile-fixture|student-mobile-diagnose)
     activate_environment

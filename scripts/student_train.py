@@ -45,6 +45,16 @@ def metrics(prediction, target, box):
             'teacher_frame_delta_mean': float((target[1:]-target[:-1]).abs().mean())}
 
 
+def pixel_box(values, label):
+    if not all(math.isfinite(value) and 0 <= value <= 1 for value in values):
+        raise ValueError(f'{label} coordinates must be finite and in [0, 1]')
+    box = tuple(round(value*256) for value in values)
+    x0, y0, x1, y1 = box
+    if x0 >= x1 or y0 >= y1:
+        raise ValueError(f'{label} must define a nonempty normalized rectangle')
+    return box
+
+
 def write_video(path, frames, waveform):
     import av
     import numpy as np
@@ -94,10 +104,9 @@ def train(args):
     record, data = load(args.dataset)
     if args.sequence_length > record['frames']:
         raise ValueError('sequence length exceeds source frames')
-    box = tuple(round(value*256) for value in args.mouth_box)
+    box = pixel_box(args.mouth_box, 'mouth box')
     x0, y0, x1, y1 = box
-    if not 0 <= x0 < x1 <= 256 or not 0 <= y0 < y1 <= 256:
-        raise ValueError('mouth box must define a nonempty normalized rectangle')
+    hand_boxes = [pixel_box(values, 'hand box') for values in getattr(args, 'hand_box', [])]
     model = model_type()
     initial_checkpoint_sha256 = None
     if args.init_checkpoint:
@@ -123,6 +132,10 @@ def train(args):
     reference = Image.fromarray(data['reference'])
     ImageDraw.Draw(reference).rectangle(box, outline='yellow', width=2)
     reference.save(args.output / 'mouth_roi_review.png')
+    if hand_boxes:
+        for region in hand_boxes:
+            ImageDraw.Draw(reference).rectangle(region, outline='cyan', width=2)
+        reference.save(args.output / 'hand_roi_review.png')
     model.eval(); initial = metrics(predict(model, image, audio), target_cpu, box)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     rng = np.random.default_rng(args.seed)
@@ -136,18 +149,24 @@ def train(args):
         with torch.no_grad():
             for index in range(max(0, start-8), start):
                 previous, state = model.forward_frame(audio[index:index+1], state, spatial, identity)
-        reconstruction, mouth, temporal = [], [], []
+        reconstruction, mouth, temporal, hand = [], [], [], []
         for index in range(start, start+args.sequence_length):
             rgb, state = model.forward_frame(audio[index:index+1], state, spatial, identity)
             truth = target[index:index+1]
-            reconstruction.append((rgb-truth).abs().mean())
-            mouth.append((rgb[:, :, y0:y1, x0:x1]-truth[:, :, y0:y1, x0:x1]).abs().mean())
+            difference = (rgb-truth).abs()
+            reconstruction.append(difference.mean())
+            mouth.append(difference[:, :, y0:y1, x0:x1].mean())
+            for left, top, right, bottom in hand_boxes:
+                hand.append(difference[:, :, top:bottom, left:right].mean())
             if previous is not None:
                 temporal.append(((rgb-previous)-(truth-target[index-1:index])).abs().mean())
             previous = rgb
         reconstruction = torch.stack(reconstruction).mean(); mouth = torch.stack(mouth).mean()
         temporal = torch.stack(temporal).mean() if temporal else reconstruction*0
         loss = reconstruction + 3*mouth + .5*temporal
+        hand_loss = torch.stack(hand).mean() if hand else None
+        if hand_loss is not None:
+            loss = loss + 2*hand_loss
         if not torch.isfinite(loss):
             raise RuntimeError('non-finite training loss')
         loss.backward()
@@ -157,6 +176,8 @@ def train(args):
             row = {'step': step, 'loss': float(loss.detach()), 'reconstruction': float(reconstruction.detach()),
                    'mouth_roi': float(mouth.detach()), 'temporal': float(temporal.detach()),
                    'gradient_norm_before_clip': float(norm), 'elapsed_seconds': time.perf_counter()-started}
+            if hand_loss is not None:
+                row['hand_roi'] = float(hand_loss.detach())
             log.append(row); print(json.dumps(row), flush=True)
     train_seconds = time.perf_counter()-started
     model.eval(); prediction = predict(model, image, audio)
@@ -184,6 +205,9 @@ def train(args):
               'static_reference_copy': metrics(image[0].detach().cpu()[None].expand_as(target_cpu), target_cpu, box),
               'audio_shift_output_change_mae': float((prediction-shuffled_prediction).abs().mean()),
               'silence_output_change_mae': float((prediction-silence_prediction).abs().mean()), 'log': log}
+    if hand_boxes:
+        report['hand_boxes_pixels'] = hand_boxes
+        report['loss_weights']['manual_hand_roi_l1'] = 2
     provenance = {'purpose': report['purpose'], 'teacher_trained': True, 'optimizer_steps': args.steps,
                   'dataset_manifest_sha256': report['dataset_manifest_sha256'],
                   'source_video_sha256': record['source_video_sha256'], 'audio_contract': CONTRACT,
@@ -220,6 +244,9 @@ def main():
     parser.add_argument('--seed', type=int, default=713)
     parser.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default='auto')
     parser.add_argument('--mouth-box', nargs=4, type=float, default=[.35, .36, .65, .52], metavar=('X0','Y0','X1','Y1'))
+    parser.add_argument('--hand-box', nargs=4, type=float, action='append', default=[],
+                        metavar=('X0','Y0','X1','Y1'),
+                        help='repeatable normalized hand motion region for extra reconstruction supervision')
     args = parser.parse_args()
     if not 1 <= args.steps <= 10000 or not 2 <= args.sequence_length <= 16 or not math.isfinite(args.lr) or not 0 < args.lr <= .01:
         parser.error('steps 1..10000, sequence length 2..16, finite learning rate (0,.01] required')
